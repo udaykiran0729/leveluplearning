@@ -36,6 +36,7 @@ client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # Tesseract path (Windows)
 pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+TESS_CONFIG = "--oem 1 --psm 3"
 
 
 # ─── HELPER: Get AI answer ─────────────────────────────────────────────────────
@@ -188,7 +189,7 @@ def ask_voice(
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# ROUTE 4 — Ask via image (OCR → AI)
+# ROUTE 4 — Ask via image (OCR → AI) — optimised for speed
 # ════════════════════════════════════════════════════════════════════════════════
 @app.post("/ask/image")
 def ask_image(
@@ -200,10 +201,12 @@ def ask_image(
 ):
     image_data = image.file.read()
     pil_image  = Image.open(io.BytesIO(image_data))
-    extracted  = pytesseract.image_to_string(pil_image).strip()
+    pil_image  = pil_image.convert("L")       # grayscale — 2x faster OCR
+    pil_image.thumbnail((1024, 1024))          # shrink large images before OCR
+    extracted  = pytesseract.image_to_string(pil_image, config=TESS_CONFIG).strip()
 
     if not extracted:
-        return {"error": "No text found in image. Try a clearer photo!"}
+        return {"error": "No text found in image. Try a clearer photo of text or a textbook page!"}
 
     if is_topic_blocked(user_id, extracted, db):
         return {"answer": "Oops! That topic is not available. Ask me something else! 😊"}
